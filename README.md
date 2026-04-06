@@ -1,57 +1,65 @@
-# MSnet
+# π-MSNet: A billion-scale, AI-Ready living proteomics data Portal
 
-A large open benchmark dataset for computational proteomics based on public proteomics data. The project aims to generate an extensive collection of data that can be used to train AI algorithms for the following use cases: 
+![π-MSNet Logo](assets/Figure1_V9.png)  
 
-1. Peptide/Protein identification based on LLMs methods (de novo or FASTA database). For this use case, the collection MUST include the peptide identifications and the corresponding data.
-2. Retention time prediction. For this use case, the collection MUST include, the peptide identification, and experimental retention time, MS1 information.
-3. PTM localization. For PTM localization, the PTM, the position and the corresponding score are associated with the site localization.    
+π-MSNet is a high-quality, large-scale, living data portal for computational proteomics. It provides standardized, AI-ready datasets for training, benchmarking, and developing machine learning models in proteomics. The portal integrates diverse mass spectrometry (MS) datasets from public repositories and in-house projects, offering unprecedented scale, diversity, and reproducibility.
 
-# Contributors
+## Overview
 
-- Phoenix center: Cheng Chang, Linhai Xie, Chengxin Dai, Tianze Ling
-- EBI: Yasset Perez-Riverol
-- Shanghai AI lab: Zhiqiang Gao
-- Chongqing: Mingze Bai
+Proteomics increasingly relies on data-driven methods, particularly deep learning, to interpret complex mass spectrometry data. Existing datasets are often fragmented, incompletely annotated, or limited in scale, impeding reproducibility and fair benchmarking. π-MSNet addresses these limitations by providing a continuously updated, standardized, and scalable dataset resource that supports AI model development across diverse experimental conditions.
 
-## 1. Use quantms to re-analyze the data in PRIDE (Yasset) and iProX (Cheng and Zhiqiang)
+Key highlights of π-MSNet:
 
-The following decisions have been made during the discussion (20223/06/20): 
+- **501 million peptide-spectrum matches (PSMs) and 9 million precursors** from 55 species, including eukaryotes, prokaryotes, viruses, and archaea.
+- **1.66 billion MS² spectra** from 36,356 LC–MS/MS runs across 114 projects (~30 TB of raw data).
+- Data acquired on **ten different mass spectrometer types** and processed with diverse fragmentation strategies.
+- PSMs cover both **typical tryptic peptides** and peptides from **non-specific, Lys-C, Glu-C, and chymotrypsin cleavage**.
+- Uniformly annotated in **SDRF format**, following the HUPO-PSI metadata standard.
+- Stored in the **QPX Parquet format** for scalable, fast access and reduced storage requirements.
 
-- quantms (https://github.com/bigbio/quantms) will be used as the workflow to perform the peptide/protein identifications.
-- Public data will be reused from ProteomeXchange. For that, the following has been decided:
-  - Every dataset should be annotated with an SDRF, this should be a collective effort between all teams involved using Pull requests in this repo.
-  - Datasets from PRIDE will be reanalysed by the PRIDE team, while iPROX datasets will be reanalyzed by the Phoenix Centre group. Datasets from other ProteomeXchange databases will be analyzed by any of the partners of the project. 
+## Data Processing Workflow
 
-### 1.1 For input data
+1. **Data Curation:** Collected 114 public datasets from ProteomeXchange and π-HuB projects, covering diverse species, instruments, and experimental strategies.
+2. **Uniform Annotation:** All datasets were standardized using SDRF format.
+3. **Reanalysis:** MS² spectra were processed with the open-source [quantms](https://github.com/bigbio/quantms) workflow, integrating results from multiple search engines (e.g., MS-GF+ and Comet) to improve PSM robustness.
+4. **Data Export:** PSMs and metadata exported to QPX Parquet format, optimized for rapid access, reduced storage (96% smaller than CSV), and efficient downstream AI workflows.
+5. **Model Benchmarking:** Existing deep learning models were retrained and benchmarked on the π-MSNet dataset to demonstrate performance improvements.
 
-- MS instrument: High-resolution data only. Note: If data for low resolution is generated, we should keep it for version 1.2 of the project. 
-- HCD/CID/ETD
-- Species: We should focus first on Human. Note: most of the current algorithms and training datasets have been generated using human data, would be great to start from the beginning annotating other species, like viruses, bacteria, yeast, etc. 
-- DDA at first, Then DIA.
-- TMT and Label-free
+![π-MSNet Workflow](assets/Figure2_Latest.png)  
+*Figure 1: π-MSNet processing workflow.*
 
-### 1.2 quantms for analysis tools
+## MSNetLoader: Efficient Data Loading for π-MSNet
 
-- Search engine: MSGF+, Comet, and SAGE (when available).
-- FDR at the project level: We should start using 1% FDR at PSM level, however for very large projects with millions of PSMs, we should try to reduce that FDR to 0.001 (depending on the project size). 
+MSNetLoader is a Python utility designed to streamline access to π-MSNet datasets in QPX Parquet format. It enables efficient loading of PSMs and metadata, supports batch processing, and integrates seamlessly with machine learning workflows.
 
-### 1.3 QC integration from multiple datasets
+**Key Features:**
 
-If the number of datasets integrated increases, also the number of false positive PSMS (even if the FDR is reduced to 0.001). The first research should be done about this topic, how to control FDR in the aggregation of the data. Possible solutions: 
+- Load PSMs and associated metadata from QPX Parquet files with minimal memory overhead.
+- Supports batched and shuffled data access for model training and evaluation.
+- Provides integration-ready PyTorch and TensorFlow dataset objects.
 
-- Clustering. By using clustering you can reduce the number of PSMs and just include in the data the high-quality clusters.
-- Select the best high-quality hit for each spectrum representation. 
-  
-## 2. The output file format
+**Example Usage:**
 
-From quantms would be good to have a different output that can be easily transferred between repositories (iProX - China, PRIDE - UK). 
+```python
+from msnetloader import MSNetLoader
 
-## 3. Implement PANDAnovo (LLM) into quantms
+# Initialize loader with local or remote QPX dataset path
+loader = MSNetLoader(qpx_path='path/to/qpx_dataset.parquet')
 
-## 4. Website for data sharing and data visualization:
-- USI?
-- Spectrum anatation?
+# Load PSMs for Homo sapiens tryptic peptides
+psms, metadata = loader.load(batch_size=1024)
 
-## 5. Meetings
-- First meeting (20223/06/20)
-- to do done.
+# Iterate through batches for model training
+for batch_psms, batch_meta in loader:
+    # process batch
+    pass
+```
+
+## Data Access
+
+- Interactive portal: [π-MSNet Portal](https://msnet.ncpsb.org.cn)  
+- Dataset downloads and documentation: [π-MSNet Portal](https://msnet.ncpsb.org.cn) and [quantms Datasets](https://quantms.org/datasets)
+
+## Citation
+
+If you use π-MSNet in your research, please cite:

@@ -1,0 +1,108 @@
+[project]
+name = "msnet-loader"
+dynamic = ["version"]
+description = "Validate and convert SDRF files to configuration files for pipelines."
+readme = "README.md"
+authors = [
+    { name = "BigBio Team", email = "ypriverol@gmail.com" }
+]
+license = "Apache-2.0"
+requires-python = ">=3.10"
+keywords = ["sdrf", "python", "multiomics", "proteomics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Core dependencies for structural validation and conversions
+dependencies = [
+    "torch==2.6.0",
+    "pandas",
+    "numpy",
+    "pyarrow==17.0.0",
+    "datasets",
+]
+
+[project.optional-dependencies]
+# Ontology validation features (term lookup via OLS)
+ontology = [
+    "fastparquet",
+    "pooch",
+    "rdflib",
+    "requests",
+]
+# All features
+all = [
+    "fastparquet",
+    "pooch",
+    "rdflib",
+    "requests",
+]
+
+[project.urls]
+Homepage = "https://github.com/bigbio/sdrf-pipelines"
+Repository = "https://github.com/bigbio/sdrf-pipelines"
+
+
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+
+# Note: setuptools_scm configuration is in setup.py to support custom local_scheme callable
+# The callable encodes branch name into version for ontology cache downloads
+
+[dependency-groups]
+dev = [
+    "fastparquet",
+    "flake8",
+    "mypy",
+    "pooch",
+    "pre-commit",
+    "pylint",
+    "pytest",
+    "pytest-datadir",
+    "rdflib",
+    "requests",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E203"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "ontology: tests that require ontology dependencies (pooch, rdflib, requests)",
+]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+packages = ["sdrf_pipelines"]
+
+[[tool.mypy.overrides]]
+module = "fastparquet"
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
