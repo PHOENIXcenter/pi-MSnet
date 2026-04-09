@@ -1,10 +1,10 @@
 [project]
-name = "msnet-loader"
+name = "msnetloader"
 dynamic = ["version"]
-description = "Validate and convert SDRF files to configuration files for pipelines."
+description = "A Python API for seamless integration of π-MSNet into AI workflows"
 readme = "README.md"
 authors = [
-    { name = "BigBio Team", email = "ypriverol@gmail.com" }
+    { name = "chengxin dai", email = "chengxin2024@126.com" }
 ]
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -27,25 +27,9 @@ dependencies = [
     "datasets",
 ]
 
-[project.optional-dependencies]
-# Ontology validation features (term lookup via OLS)
-ontology = [
-    "fastparquet",
-    "pooch",
-    "rdflib",
-    "requests",
-]
-# All features
-all = [
-    "fastparquet",
-    "pooch",
-    "rdflib",
-    "requests",
-]
-
 [project.urls]
-Homepage = "https://github.com/bigbio/sdrf-pipelines"
-Repository = "https://github.com/bigbio/sdrf-pipelines"
+Homepage = "https://github.com/daichengxin/MSnet/"
+Repository = "https://github.com/daichengxin/MSnet/"
 
 
 [build-system]
@@ -94,8 +78,7 @@ markers = [
 ]
 
 [tool.mypy]
-plugins = ["pydantic.mypy"]
-packages = ["sdrf_pipelines"]
+packages = ["msnetloader"]
 
 [[tool.mypy.overrides]]
 module = "fastparquet"
