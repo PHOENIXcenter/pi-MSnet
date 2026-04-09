@@ -32,6 +32,8 @@ Key highlights of π-MSNet:
 
 MSNetLoader is a Python utility designed to streamline access to π-MSNet datasets in QPX Parquet format. It enables efficient loading of PSMs and metadata, supports batch processing, and integrates seamlessly with machine learning workflows.
 
+![MSNetLoader](assets/msnetloader.jpg)  
+
 **Key Features:**
 
 - Load PSMs and associated metadata from QPX Parquet files with minimal memory overhead.
@@ -41,16 +43,32 @@ MSNetLoader is a Python utility designed to streamline access to π-MSNet datase
 **Example Usage:**
 
 ```python
-from msnetloader import MSNetLoader
+from msnetloader.ms2_loader import (
+    AlphaPeptDeepConverter,
+    MS2TorchDataset,
+    LengthExactSampler,
+)
+from torch.utils.data import DataLoader
 
-# Initialize loader with local or remote QPX dataset path
-loader = MSNetLoader(qpx_path='path/to/qpx_dataset.parquet')
-
-# Load PSMs for Homo sapiens tryptic peptides
-psms, metadata = loader.load(batch_size=1024)
+file_path = 'test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet'
+converter = AlphaPeptDeepConverter(file_path)
+precursor_df, fragment_df = converter.convert_parquet_to_training_format()
+dataset = MS2TorchDataset(precursor_df, fragment_df)
+lengths = dataset.dataset["nAA"]
+sampler = LengthExactSampler(
+    lengths=lengths,
+    batch_size=8,   
+    shuffle=False 
+)
+dataloader = DataLoader(
+    dataset.dataset,
+    batch_sampler=sampler,
+    num_workers=0,
+    pin_memory=False
+)
 
 # Iterate through batches for model training
-for batch_psms, batch_meta in loader:
+for batch_psms, batch_meta in dataloader:
     # process batch
     pass
 ```
