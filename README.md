@@ -43,26 +43,15 @@ MSNetLoader is a Python utility designed to streamline access to π-MSNet datase
 **Example Usage:**
 
 ```python
-from msnetloader.ms2_loader import (
-    AlphaPeptDeepConverter,
-    MS2TorchDataset,
-    LengthExactSampler,
-)
+from msnetloader.ms2_loader import MS2TorchDataset
+
 from torch.utils.data import DataLoader
 
 file_path = 'test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet'
-converter = AlphaPeptDeepConverter(file_path)
-precursor_df, fragment_df = converter.convert_parquet_to_training_format()
-dataset = MS2TorchDataset(precursor_df, fragment_df)
-lengths = dataset.dataset["nAA"]
-sampler = LengthExactSampler(
-    lengths=lengths,
-    batch_size=8,   
-    shuffle=False 
-)
+dataset = MS2TorchDataset(file_path,ion_types=("b, y"))
 dataloader = DataLoader(
-    dataset.dataset,
-    batch_sampler=sampler,
+    dataset,
+    batch_size=None,
     num_workers=0,
     pin_memory=False
 )

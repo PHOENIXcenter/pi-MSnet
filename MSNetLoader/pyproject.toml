@@ -24,7 +24,8 @@ dependencies = [
     "pandas",
     "numpy",
     "pyarrow==17.0.0",
-    "datasets",
+    "tensorflow",
+    "duckdb"
 ]
 
 [project.urls]

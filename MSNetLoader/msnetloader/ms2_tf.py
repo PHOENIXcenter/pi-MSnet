@@ -1,17 +1,20 @@
-import torch
+import tensorflow as tf
 import numpy as np
-from torch.utils.data import IterableDataset
 import duckdb
 import re
 
 
-class MS2TorchDataset(IterableDataset):
+class MS2TFDataset:
 
-    def __init__(self, parquet_path, batch_size=8, ion_types=("b", "y"), charges=(1, 2),
-                 min_consensus_support=None,
-                 max_pep=None
-                 ):
-
+    def __init__(
+        self,
+        parquet_path,
+        batch_size=8,
+        ion_types=("b", "y"),
+        charges=(1, 2),
+        min_consensus_support=None,
+        max_pep=None
+    ):
         con = duckdb.connect()
 
         query = f"""
@@ -29,6 +32,7 @@ class MS2TorchDataset(IterableDataset):
         """
 
         self.arrow_table = con.execute(query).to_arrow_table()
+
         self.batch_size = batch_size
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
@@ -45,19 +49,34 @@ class MS2TorchDataset(IterableDataset):
 
         self.active_channels = [
             self.channel_map[(t, z)]
-            for t in ion_types
-            for z in charges
+            for t in ion_types for z in charges
             if (t, z) in self.channel_map
         ]
 
-    # -----------------------------
-    def __iter__(self):
+    # =========================================================
+    # generator（核心替代 __iter__）
+    # =========================================================
+    def generator(self):
         for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
             yield self.process_batch(batch)
 
-    # -----------------------------
-    def process_batch(self, batch):
+    # =========================================================
+    def get_dataset(self):
+        output_signature = {
+            "peptide": tf.TensorSpec(shape=(None,), dtype=tf.string),
+            "charge": tf.TensorSpec(shape=(None,), dtype=tf.int32),
+            "nce": tf.TensorSpec(shape=(None,), dtype=tf.float32),
+            "instruments": tf.TensorSpec(shape=(None,), dtype=tf.string),
+            "targets": tf.TensorSpec(shape=(None, None, len(self.active_channels)), dtype=tf.float32),
+        }
 
+        return tf.data.Dataset.from_generator(
+            self.generator,
+            output_signature=output_signature
+        )
+
+    # =========================================================
+    def process_batch(self, batch):
         sequences = batch["sequence"].to_pylist()
         peptidoform = batch["peptidoform"].to_pylist()
         charges = batch["charge"].to_pylist()
@@ -75,18 +94,15 @@ class MS2TorchDataset(IterableDataset):
             intensities
         )
 
-        charge_tensor = torch.tensor(charges, dtype=torch.long)
-        nce_tensor = torch.tensor(nces, dtype=torch.float32)
-
         return {
-            "peptide": peptidoform,
-            "charge": charge_tensor,
-            "nce": nce_tensor,
-            "instruments": instruments,
-            "targets": targets
+            "peptide": np.array(peptidoform, dtype=np.string_),
+            "charge": np.array(charges, dtype=np.int32),
+            "nce": np.array(nces, dtype=np.float32),
+            "instruments": np.array(instruments, dtype=np.string_),
+            "targets": targets.numpy(),  # TF expects numpy
         }
 
-    # -----------------------------
+    # =========================================================
     def build_batch_fragments(
         self,
         sequences,
@@ -94,15 +110,12 @@ class MS2TorchDataset(IterableDataset):
         frag_charges_list,
         intensity_list
     ):
-
         B = len(sequences)
         Lmax = max(len(s) for s in sequences)
 
         out = np.zeros((B, Lmax - 1, 4), dtype=np.float32)
 
-        # -----------------------------
         for b in range(B):
-
             ions = fragments_list[b]
             charges = frag_charges_list[b]
             ints = intensity_list[b]
@@ -131,21 +144,15 @@ class MS2TorchDataset(IterableDataset):
             if len(ions) == 0:
                 continue
 
-            # -----------------------------
-            # parse ion string safely
-            # -----------------------------
             ion_str = ions.astype(str)
-
             ion_type = np.array([x[0] for x in ion_str])
 
-            # SAFE regex position parsing
             pos = np.array([
                 int(re.findall(r"\d+", x)[0]) if re.findall(r"\d+", x) else -1
                 for x in ion_str
             ])
 
             seq_len = len(sequences[b])
-
             valid = (pos >= 1) & (pos < seq_len)
 
             ion_type = ion_type[valid]
@@ -156,9 +163,6 @@ class MS2TorchDataset(IterableDataset):
             if len(pos) == 0:
                 continue
 
-            # -----------------------------
-            # channel mapping (fixed)
-            # -----------------------------
             ch = np.full(len(ion_type), -1, dtype=np.int32)
 
             for (t, z), c in self.channel_map.items():
@@ -166,7 +170,6 @@ class MS2TorchDataset(IterableDataset):
                     ch[(ion_type == t) & (charges == z)] = c
 
             valid_ch = ch >= 0
-
             pos = pos[valid_ch]
             ch = ch[valid_ch]
             ints = ints[valid_ch]
@@ -174,61 +177,9 @@ class MS2TorchDataset(IterableDataset):
             if len(pos) == 0:
                 continue
 
-            # -----------------------------
-            # intensity normalize
-            # -----------------------------
             max_int = ints.max() if len(ints) > 0 else 1.0
             ints = ints / max_int
 
-            # -----------------------------
-            # scatter
-            # -----------------------------
             out[b, pos, ch] += ints
 
-        # -----------------------------
-        return torch.from_numpy(out[:, :, self.active_channels])
-
-    # =========================================================
-    # Optional FILTER 1
-    # =========================================================
-    def filter_by_consensus_support(self, support):
-        """
-        Keep spectrum if consensus_support >= threshold
-        """
-        if self.min_consensus_support is None:
-            return True
-
-        if support is None:
-            return False
-
-        return support >= self.min_consensus_support
-
-    # =========================================================
-    # Optional FILTER 2
-    # =========================================================
-    def filter_by_pep(self, pep):
-        """
-        Keep spectrum if posterior_error_probability <= threshold
-        """
-        if self.max_pep is None:
-            return True
-
-        if pep is None:
-            return False
-
-        return pep <= self.max_pep
-
-
-if __name__ == "__main__":
-    dataset = MS2TorchDataset("D:/gitrepo/MSnet/MSNetLoader/tests/test_data\PXD014877-Akkermansia_muciniphilia-MSNet.parquet",
-                              ion_types=("b, y"))
-    from torch.utils.data import DataLoader
-    dataloader = DataLoader(
-        dataset,
-        batch_size=None,
-        num_workers=0,
-        pin_memory=False
-    )
-    for batch in dataloader:
-        print(batch)
-        break
+        return tf.convert_to_tensor(out[:, :, self.active_channels], dtype=tf.float32)

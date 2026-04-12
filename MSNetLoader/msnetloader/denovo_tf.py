@@ -1,14 +1,14 @@
-import torch
+import tensorflow as tf
 import numpy as np
-from torch.utils.data import IterableDataset
 import duckdb
 
 
-class DeNovoIterableDataset(IterableDataset):
+class DeNovoTFDataset:
 
     def __init__(self, parquet_path, max_peaks=150, batch_size=32,
                  min_consensus_support=None,
                  max_pep=None):
+
         con = duckdb.connect()
 
         query = f"""
@@ -24,17 +24,50 @@ class DeNovoIterableDataset(IterableDataset):
         """
 
         self.arrow_table = con.execute(query).to_arrow_table()
+
         self.batch_size = batch_size
         self.max_peaks = max_peaks
-        self.batch_size = batch_size
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
 
-    def __iter__(self):
-        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
-            yield self.process_batch(batch)
+    # =========================================================
+    # Generator (核心)
+    # =========================================================
+    def generator(self):
 
-    # -----------------------------
+        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
+            result = self.process_batch(batch)
+
+            for i in range(len(result["sequence"])):
+                yield (
+                    result["spectrum"][i],
+                    result["sequence"][i],
+                    result["precursor_mz"][i],
+                    result["charge"][i],
+                )
+
+    # =========================================================
+    # TF Dataset接口
+    # =========================================================
+    def get_dataset(self):
+
+        output_signature = (
+            tf.TensorSpec(shape=(None, 2), dtype=tf.float32),  # spectrum
+            tf.TensorSpec(shape=(), dtype=tf.string),          # sequence
+            tf.TensorSpec(shape=(), dtype=tf.float32),         # precursor_mz
+            tf.TensorSpec(shape=(), dtype=tf.int32),           # charge
+        )
+
+        ds = tf.data.Dataset.from_generator(
+            self.generator,
+            output_signature=output_signature
+        )
+
+        return ds
+
+    # =========================================================
+    # batch处理（基本不变）
+    # =========================================================
     def process_batch(self, batch):
 
         peptidoform = batch["peptidoform"].to_pylist()
@@ -50,9 +83,6 @@ class DeNovoIterableDataset(IterableDataset):
         charge_out = []
         precursor_out = []
 
-        # -----------------------------
-        # per spectrum processing
-        # -----------------------------
         for i in range(len(peptidoform)):
 
             if not self.filter_by_consensus_support(consensus_supports[i]):
@@ -83,44 +113,30 @@ class DeNovoIterableDataset(IterableDataset):
 
             spectrum = np.stack([mz, intensity], axis=1)
 
-            spectra_out.append(torch.tensor(spectrum, dtype=torch.float32))
-            seq_out.append(peptidoform[i])
-            charge_out.append(charges[i])
-            precursor_out.append(precursor_mz[i])
+            spectra_out.append(spectrum.astype(np.float32))
+            seq_out.append(peptidoform[i].encode("utf-8"))  # TF需要bytes
+            charge_out.append(np.int32(charges[i]))
+            precursor_out.append(np.float32(precursor_mz[i]))
 
         return {
             "spectrum": spectra_out,
             "sequence": seq_out,
-            "precursor_mz": torch.tensor(precursor_out, dtype=torch.float32),
-            "charge": torch.tensor(charge_out, dtype=torch.long),
+            "precursor_mz": precursor_out,
+            "charge": charge_out,
         }
 
     # =========================================================
-    # Optional FILTER 1
-    # =========================================================
     def filter_by_consensus_support(self, support):
-        """
-        Keep spectrum if consensus_support >= threshold
-        """
         if self.min_consensus_support is None:
             return True
-
         if support is None:
             return False
-
         return support >= self.min_consensus_support
 
     # =========================================================
-    # Optional FILTER 2
-    # =========================================================
     def filter_by_pep(self, pep):
-        """
-        Keep spectrum if posterior_error_probability <= threshold
-        """
         if self.max_pep is None:
             return True
-
         if pep is None:
             return False
-
         return pep <= self.max_pep
