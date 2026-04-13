@@ -10,34 +10,51 @@ class DeNovoTFDataset:
                  max_pep=None):
 
         con = duckdb.connect()
+        self.min_consensus_support = min_consensus_support
+        self.max_pep = max_pep
+
+        conditions = []
+        params = []
+
+        if self.min_consensus_support is not None:
+            conditions.append("consensus_support >= ?")
+            params.append(self.min_consensus_support)
+
+        if self.max_pep is not None:
+            conditions.append("posterior_error_probability <= ?")
+            params.append(self.max_pep)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
 
         query = f"""
-            SELECT
-                peptidoform,
-                exp_mass_to_charge AS precursor_mz,
-                precursor_charge AS charge,
-                mz_array,
-                consensus_support,
-                posterior_error_probability,
-                intensity_array
-            FROM parquet_scan('{parquet_path}')
-        """
+                 SELECT
+                     peptidoform,
+                     exp_mass_to_charge AS precursor_mz,
+                     precursor_charge AS charge,
+                     mz_array,
+                     consensus_support,
+                     posterior_error_probability,
+                     intensity_array
+                 FROM parquet_scan(?)
+                 {where_clause}
+                 """
 
-        self.arrow_table = con.execute(query).to_arrow_table()
+        self.cursor = con.execute(query, [parquet_path] + params)
 
         self.batch_size = batch_size
         self.max_peaks = max_peaks
-        self.min_consensus_support = min_consensus_support
-        self.max_pep = max_pep
 
     # =========================================================
     # Generator (核心)
     # =========================================================
     def generator(self):
-
-        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
+        reader = self.cursor.fetch_record_batch(self.batch_size)
+        for batch in reader:
+            if batch.num_rows == 0:
+                continue
             result = self.process_batch(batch)
-
             for i in range(len(result["sequence"])):
                 yield (
                     result["spectrum"][i],
@@ -124,19 +141,3 @@ class DeNovoTFDataset:
             "precursor_mz": precursor_out,
             "charge": charge_out,
         }
-
-    # =========================================================
-    def filter_by_consensus_support(self, support):
-        if self.min_consensus_support is None:
-            return True
-        if support is None:
-            return False
-        return support >= self.min_consensus_support
-
-    # =========================================================
-    def filter_by_pep(self, pep):
-        if self.max_pep is None:
-            return True
-        if pep is None:
-            return False
-        return pep <= self.max_pep

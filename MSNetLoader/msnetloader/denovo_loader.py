@@ -9,29 +9,50 @@ class DeNovoIterableDataset(IterableDataset):
     def __init__(self, parquet_path, max_peaks=150, batch_size=32,
                  min_consensus_support=None,
                  max_pep=None):
+
         con = duckdb.connect()
-
-        query = f"""
-            SELECT
-                peptidoform,
-                exp_mass_to_charge AS precursor_mz,
-                precursor_charge AS charge,
-                mz_array,
-                consensus_support,
-                posterior_error_probability,
-                intensity_array
-            FROM parquet_scan('{parquet_path}')
-        """
-
-        self.arrow_table = con.execute(query).to_arrow_table()
-        self.batch_size = batch_size
-        self.max_peaks = max_peaks
-        self.batch_size = batch_size
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
 
+        conditions = []
+        params = []
+
+        if self.min_consensus_support is not None:
+            conditions.append("consensus_support >= ?")
+            params.append(self.min_consensus_support)
+
+        if self.max_pep is not None:
+            conditions.append("posterior_error_probability <= ?")
+            params.append(self.max_pep)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+                SELECT
+                    peptidoform,
+                    exp_mass_to_charge AS precursor_mz,
+                    precursor_charge AS charge,
+                    mz_array,
+                    consensus_support,
+                    posterior_error_probability,
+                    intensity_array
+                FROM parquet_scan(?)
+                {where_clause}
+                """
+
+        self.cursor = con.execute(query, [parquet_path] + params)
+
+        self.batch_size = batch_size
+        self.max_peaks = max_peaks
+
     def __iter__(self):
-        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
+        reader = self.cursor.fetch_record_batch(self.batch_size)
+
+        for batch in reader:
+            if batch.num_rows == 0:
+                continue
             yield self.process_batch(batch)
 
     # -----------------------------
@@ -54,13 +75,6 @@ class DeNovoIterableDataset(IterableDataset):
         # per spectrum processing
         # -----------------------------
         for i in range(len(peptidoform)):
-
-            if not self.filter_by_consensus_support(consensus_supports[i]):
-                continue
-
-            if not self.filter_by_pep(peps[i]):
-                continue
-
             mz = np.asarray(mz_list[i], dtype=np.float32)
             intensity = np.asarray(int_list[i], dtype=np.float32)
 
@@ -95,32 +109,20 @@ class DeNovoIterableDataset(IterableDataset):
             "charge": torch.tensor(charge_out, dtype=torch.long),
         }
 
-    # =========================================================
-    # Optional FILTER 1
-    # =========================================================
-    def filter_by_consensus_support(self, support):
-        """
-        Keep spectrum if consensus_support >= threshold
-        """
-        if self.min_consensus_support is None:
-            return True
 
-        if support is None:
-            return False
+if __name__ == '__main__':
+    """Test dataset + sampler + dataloader pipeline."""
+    file_path = ["D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet",
+                 "D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet"]
+    dataset = DeNovoIterableDataset(file_path)
+    from torch.utils.data import DataLoader
+    loader = DataLoader(
+        dataset,
+        batch_size=None,
+        num_workers=0,
+        pin_memory=False
+    )
 
-        return support >= self.min_consensus_support
+    batch = next(iter(loader))
+    print(batch)
 
-    # =========================================================
-    # Optional FILTER 2
-    # =========================================================
-    def filter_by_pep(self, pep):
-        """
-        Keep spectrum if posterior_error_probability <= threshold
-        """
-        if self.max_pep is None:
-            return True
-
-        if pep is None:
-            return False
-
-        return pep <= self.max_pep

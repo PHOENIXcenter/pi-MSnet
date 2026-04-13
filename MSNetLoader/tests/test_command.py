@@ -16,9 +16,12 @@ logger.addHandler(logging.NullHandler())
 
 def test_dataset_and_dataloader():
     """Test dataset + sampler + dataloader pipeline."""
-    file_path = TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"
+
+    file_path = [str(TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"),
+                 str(TESTS_DIR / "test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet")]
+
     dataset = MS2TorchDataset(file_path,
-                              ion_types=("b, y"))
+                              ion_types=("b", "y"))
 
     dataloader = DataLoader(
         dataset,
@@ -44,7 +47,8 @@ def test_dataset_and_dataloader():
 
 def test_denovo_dataloader():
     """Test dataloader + collate_fn."""
-    file_path = TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"
+    file_path = [str(TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"),
+                 str(TESTS_DIR / "test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet")]
 
     dataset = DeNovoIterableDataset(file_path)
     loader = DataLoader(
@@ -71,12 +75,12 @@ def test_denovo_dataloader():
 
 def test_rt_dataset_and_dataloader():
     """Test RT dataset + dataloader pipeline."""
-
-    file_path = TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"
+    file_path = [str(TESTS_DIR / "test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet"),
+                 str(TESTS_DIR / "test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet")]
 
     dataset = RTIterableDataset(
         file_path,
-        batch_size=1000,   # 测试时建议小一点
+        batch_size=1000,
         min_consensus_support=1,
         max_pep=1.0
     )

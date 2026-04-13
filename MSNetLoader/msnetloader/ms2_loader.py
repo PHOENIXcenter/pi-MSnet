@@ -13,25 +13,41 @@ class MS2TorchDataset(IterableDataset):
                  ):
 
         con = duckdb.connect()
-
-        query = f"""
-            SELECT
-                sequence,
-                peptidoform,
-                precursor_charge AS charge,
-                cv_params.Instrument AS instrument,
-                CAST(cv_params."Collision Energy" AS DOUBLE) AS nce,
-                ion_type_array,
-                charge_array,
-                intensity_array
-            FROM parquet_scan('{parquet_path}')
-            ORDER BY length(sequence)
-        """
-
-        self.arrow_table = con.execute(query).to_arrow_table()
-        self.batch_size = batch_size
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
+
+        conditions = []
+        params = []
+
+        if self.min_consensus_support is not None:
+            conditions.append("consensus_support >= ?")
+            params.append(self.min_consensus_support)
+
+        if self.max_pep is not None:
+            conditions.append("posterior_error_probability <= ?")
+            params.append(self.max_pep)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+        SELECT
+            sequence,
+            peptidoform,
+            precursor_charge AS charge,
+            cv_params.Instrument AS instrument,
+            CAST(cv_params."Collision Energy" AS DOUBLE) AS nce,
+            ion_type_array,
+            charge_array,
+            intensity_array
+        FROM parquet_scan(?)
+        {where_clause}
+        ORDER BY length(sequence)
+        """
+
+        self.cursor = con.execute(query, [parquet_path] + params)
+        self.batch_size = batch_size
 
         self.ion_types = set(ion_types)
         self.charges = set(charges)
@@ -52,18 +68,20 @@ class MS2TorchDataset(IterableDataset):
 
     # -----------------------------
     def __iter__(self):
-        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
+        reader = self.cursor.fetch_record_batch(self.batch_size)
+
+        for batch in reader:
+            if batch.num_rows == 0:
+                continue
             yield self.process_batch(batch)
 
     # -----------------------------
     def process_batch(self, batch):
-
         sequences = batch["sequence"].to_pylist()
         peptidoform = batch["peptidoform"].to_pylist()
         charges = batch["charge"].to_pylist()
         nces = batch["nce"].to_pylist()
         instruments = batch["instrument"].to_pylist()
-
         fragments = batch["ion_type_array"].to_pylist()
         fragment_charges = batch["charge_array"].to_pylist()
         intensities = batch["intensity_array"].to_pylist()
@@ -188,40 +206,14 @@ class MS2TorchDataset(IterableDataset):
         # -----------------------------
         return torch.from_numpy(out[:, :, self.active_channels])
 
-    # =========================================================
-    # Optional FILTER 1
-    # =========================================================
-    def filter_by_consensus_support(self, support):
-        """
-        Keep spectrum if consensus_support >= threshold
-        """
-        if self.min_consensus_support is None:
-            return True
 
-        if support is None:
-            return False
-
-        return support >= self.min_consensus_support
-
-    # =========================================================
-    # Optional FILTER 2
-    # =========================================================
-    def filter_by_pep(self, pep):
-        """
-        Keep spectrum if posterior_error_probability <= threshold
-        """
-        if self.max_pep is None:
-            return True
-
-        if pep is None:
-            return False
-
-        return pep <= self.max_pep
-
-
-if __name__ == "__main__":
-    dataset = MS2TorchDataset("D:/gitrepo/MSnet/MSNetLoader/tests/test_data\PXD014877-Akkermansia_muciniphilia-MSNet.parquet",
-                              ion_types=("b, y"))
+if __name__ == '__main__':
+    """Test dataset + sampler + dataloader pipeline."""
+    file_path = ["D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet",
+                 "D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet"]
+    dataset = MS2TorchDataset(file_path,
+                              ion_types=("b, y"),
+                              min_consensus_support=1)
     from torch.utils.data import DataLoader
     dataloader = DataLoader(
         dataset,
@@ -229,6 +221,6 @@ if __name__ == "__main__":
         num_workers=0,
         pin_memory=False
     )
-    for batch in dataloader:
-        print(batch)
-        break
+
+    batch = next(iter(dataloader))
+    print(batch)

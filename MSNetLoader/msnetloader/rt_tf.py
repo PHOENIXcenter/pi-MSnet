@@ -13,28 +13,47 @@ class RTTFDataset:
         max_pep=None
     ):
         con = duckdb.connect()
-
-        query = f"""
-            SELECT
-                peptidoform,
-                retention_time,
-                consensus_support,
-                posterior_error_probability
-            FROM parquet_scan('{parquet_path}')
-            ORDER BY length(sequence)
-        """
-
-        self.arrow_table = con.execute(query).to_arrow_table()
-
-        self.batch_size = batch_size
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
+
+        conditions = []
+        params = []
+
+        if self.min_consensus_support is not None:
+            conditions.append("consensus_support >= ?")
+            params.append(self.min_consensus_support)
+
+        if self.max_pep is not None:
+            conditions.append("posterior_error_probability <= ?")
+            params.append(self.max_pep)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+                SELECT
+                    peptidoform,
+                    retention_time,
+                    consensus_support,
+                    posterior_error_probability
+                FROM parquet_scan(?)
+                {where_clause}
+                ORDER BY length(sequence)
+                """
+
+        self.cursor = con.execute(query, [parquet_path] + params)
+
+        self.batch_size = batch_size
 
     # =========================================================
     # generator
     # =========================================================
     def generator(self):
-        for batch in self.arrow_table.to_batches(max_chunksize=self.batch_size):
+        reader = self.cursor.fetch_record_batch(self.batch_size)
+        for batch in reader:
+            if batch.num_rows == 0:
+                continue
             yield self.process_batch(batch)
 
     # =========================================================
@@ -79,5 +98,5 @@ class RTTFDataset:
         # =====================================================
         return {
             "peptide": peptidoform,
-            "rt": retention_time / 60.0  # 秒 → 分钟
+            "rt": retention_time / 60.0  # s → m
         }

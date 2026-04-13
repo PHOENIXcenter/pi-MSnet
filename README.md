@@ -64,8 +64,8 @@ for batch_psms, batch_meta in dataloader:
 
 ## Data Access
 
-- Interactive portal: [π-MSNet Portal](https://msnet.ncpsb.org.cn)  
-- Dataset downloads and documentation: [π-MSNet Portal](https://msnet.ncpsb.org.cn) and [quantms Datasets](https://quantms.org/datasets)
+- Interactive portal: [π-MSNet Portal](https://msnet.ncpsb.org.cn) and [portal.quantms](https://portal.quantms.org/collections)
+- Dataset downloads and documentation: [π-MSNet Portal](https://msnet.ncpsb.org.cn) and [quantms Datasets](https://portal.quantms.org/collections)
 
 ## Citation
 
