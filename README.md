@@ -1,6 +1,6 @@
 # π-MSNet: A billion-scale, AI-ready living proteomics data portal
 
-![π-MSNet Logo](assets/Figure1_V9.png)  
+![π-MSNet Logo](assets/Figure1_V9.png)
 
 π-MSNet is a high-quality, large-scale, living data portal for computational proteomics. It provides standardized, AI-ready datasets for training, benchmarking, and developing machine learning models in proteomics. The portal integrates diverse mass spectrometry (MS) datasets from public repositories and in-house projects, offering unprecedented scale, diversity, and reproducibility.
 
@@ -26,13 +26,13 @@ Key highlights of π-MSNet:
 5. **Model Benchmarking:** Existing deep learning models were retrained and benchmarked on the π-MSNet dataset to demonstrate performance improvements.
 
 ![π-MSNet Workflow](assets/Figure2_Latest.png)  
-*Figure 1: π-MSNet processing workflow.*
+_Figure 1: π-MSNet processing workflow._
 
 ## MSNetLoader: Efficient Data Loading for π-MSNet
 
 MSNetLoader is a Python utility designed to streamline access to π-MSNet datasets in QPX Parquet format. It enables efficient loading of PSMs and metadata, supports batch processing, and integrates seamlessly with machine learning workflows.
 
-![MSNetLoader](assets/msnetloader.jpg)  
+![MSNetLoader](assets/msnetloader.jpg)
 
 **Key Features:**
 
@@ -48,7 +48,7 @@ from msnetloader.ms2_loader import MS2TorchDataset
 from torch.utils.data import DataLoader
 
 file_path = 'test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet'
-dataset = MS2TorchDataset(file_path,ion_types=("b, y"))
+dataset = MS2TorchDataset(file_path,ion_types=("b", "y"))
 dataloader = DataLoader(
     dataset,
     batch_size=None,

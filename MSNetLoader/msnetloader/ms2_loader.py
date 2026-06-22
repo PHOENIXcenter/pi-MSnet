@@ -205,22 +205,3 @@ class MS2TorchDataset(IterableDataset):
 
         # -----------------------------
         return torch.from_numpy(out[:, :, self.active_channels])
-
-
-if __name__ == '__main__':
-    """Test dataset + sampler + dataloader pipeline."""
-    file_path = ["D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877-Akkermansia_muciniphilia-MSNet.parquet",
-                 "D:/gitrepo/MSnet/MSNetLoader/tests/test_data/PXD014877_Clostridium_Bolteae-MSNet.parquet"]
-    dataset = MS2TorchDataset(file_path,
-                              ion_types=("b, y"),
-                              min_consensus_support=1)
-    from torch.utils.data import DataLoader
-    dataloader = DataLoader(
-        dataset,
-        batch_size=None,
-        num_workers=0,
-        pin_memory=False
-    )
-
-    batch = next(iter(dataloader))
-    print(batch)
