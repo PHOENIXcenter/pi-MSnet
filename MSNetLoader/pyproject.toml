@@ -37,6 +37,11 @@ Repository = "https://github.com/daichengxin/MSnet/"
 requires = ["setuptools>=64", "setuptools-scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools_scm]
+# The package lives one level below the git repository root (repo/MSNetLoader),
+# so setuptools-scm must search parent directories for the version tag.
+search_parent_directories = true
+
 [tool.setuptools.package-data]
 
 [dependency-groups]
