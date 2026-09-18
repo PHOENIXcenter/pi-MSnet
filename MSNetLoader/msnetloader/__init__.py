@@ -1,5 +1,8 @@
 """msnetloader: a Python API for seamless integration of π-MSNet into AI workflows."""
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _package_version
+
 from msnetloader.download import (
     download_by_metadata,
     download_dataset,
@@ -15,7 +18,10 @@ from msnetloader.split import (
     split_peptides,
 )
 
-__version__ = "0.0.1"
+try:
+    __version__ = _package_version("msnetloader")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 
 __all__ = [
     "__version__",

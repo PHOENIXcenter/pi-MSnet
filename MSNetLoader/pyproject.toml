@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "chengxin dai", email = "chengxin2024@126.com" }
 ]
-license = "Apache-2.0"
+license = "GPL-3.0"
 requires-python = ">=3.10"
 keywords = ["sdrf", "python", "multiomics", "proteomics"]
 classifiers = [
@@ -38,9 +38,6 @@ requires = ["setuptools>=64", "setuptools-scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-
-# Note: setuptools_scm configuration is in setup.py to support custom local_scheme callable
-# The callable encodes branch name into version for ontology cache downloads
 
 [dependency-groups]
 dev = [
