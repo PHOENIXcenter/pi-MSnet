@@ -1,15 +1,17 @@
-import torch
-import numpy as np
-from torch.utils.data import IterableDataset
-import duckdb
 import re
+
+import duckdb
+import numpy as np
+import torch
+from torch.utils.data import IterableDataset
 
 
 class MS2TorchDataset(IterableDataset):
 
     def __init__(self, parquet_path, batch_size=8, ion_types=("b", "y"), charges=(1, 2),
                  min_consensus_support=None,
-                 max_pep=None
+                 max_pep=None,
+                 extra_where=None
                  ):
 
         con = duckdb.connect()
@@ -26,6 +28,9 @@ class MS2TorchDataset(IterableDataset):
         if self.max_pep is not None:
             conditions.append("posterior_error_probability <= ?")
             params.append(self.max_pep)
+
+        if extra_where is not None:
+            conditions.append(f"({extra_where})")
 
         where_clause = ""
         if conditions:
@@ -132,7 +137,7 @@ class MS2TorchDataset(IterableDataset):
             charges = np.asarray(charges)
             ints = np.asarray(ints, dtype=np.float32)
 
-            valid = (ions != None)
+            valid = np.array([ion is not None for ion in ions])
             ions = ions[valid]
             charges = charges[valid]
             ints = ints[valid]

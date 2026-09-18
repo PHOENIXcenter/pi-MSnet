@@ -1,7 +1,8 @@
-import tensorflow as tf
-import numpy as np
-import duckdb
 import re
+
+import duckdb
+import numpy as np
+import tensorflow as tf
 
 
 class MS2TFDataset:
@@ -146,7 +147,7 @@ class MS2TFDataset:
             charges = np.asarray(charges)
             ints = np.asarray(ints, dtype=np.float32)
 
-            valid = (ions != None)
+            valid = np.array([ion is not None for ion in ions])
             ions = ions[valid]
             charges = charges[valid]
             ints = ints[valid]

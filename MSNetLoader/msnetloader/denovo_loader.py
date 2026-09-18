@@ -1,14 +1,15 @@
-import torch
-import numpy as np
-from torch.utils.data import IterableDataset
 import duckdb
+import numpy as np
+import torch
+from torch.utils.data import IterableDataset
 
 
 class DeNovoIterableDataset(IterableDataset):
 
     def __init__(self, parquet_path, max_peaks=150, batch_size=32,
                  min_consensus_support=None,
-                 max_pep=None):
+                 max_pep=None,
+                 extra_where=None):
 
         con = duckdb.connect()
         self.min_consensus_support = min_consensus_support
@@ -24,6 +25,9 @@ class DeNovoIterableDataset(IterableDataset):
         if self.max_pep is not None:
             conditions.append("posterior_error_probability <= ?")
             params.append(self.max_pep)
+
+        if extra_where is not None:
+            conditions.append(f"({extra_where})")
 
         where_clause = ""
         if conditions:
@@ -63,8 +67,6 @@ class DeNovoIterableDataset(IterableDataset):
         mz_list = batch["mz_array"].to_pylist()
         int_list = batch["intensity_array"].to_pylist()
         precursor_mz = batch["precursor_mz"].to_pylist()
-        consensus_supports = batch["consensus_support"].to_pylist()
-        peps = batch["posterior_error_probability"].to_pylist()
 
         spectra_out = []
         seq_out = []
