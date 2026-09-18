@@ -42,6 +42,43 @@ download_dataset(
 Interrupted downloads are resumed automatically from the `*.part` file;
 pass `force=True` to re-download existing files.
 
+### Select datasets by experimental metadata
+
+Choose which projects to download by their experimental properties (enzyme,
+instrument, species, …) instead of hard-coding accessions. Metadata is
+fetched once from the quantms portal and cached for 24 h in
+`~/.cache/msnetloader`:
+
+```python
+from msnetloader import download_by_metadata, fetch_collection_metadata, search_datasets
+
+# inspect the whole collection (114 datasets in the msnet collection)
+metadata = fetch_collection_metadata()
+metadata[0]  # {"accession": "...", "enzyme": "Trypsin", "instrument": "Orbitrap Fusion Lumos", ...}
+
+# filter: any substring, case-insensitive; lists match if any value matches
+hits = search_datasets(datasets=metadata, instrument="Orbitrap", enzyme="Trypsin")
+[h["accession"] for h in hits]
+
+# one-liner: search and download the matches (at least one filter is required)
+download_by_metadata(
+    data_dir="data",
+    files=["dataset", "run"],          # metadata first; use ["msnet"] for the spectra
+    enzyme="Trypsin",
+    instrument="Orbitrap Fusion Lumos",
+    species="Homo sapiens",
+    min_psms=1_000_000,
+)
+
+# download a hand-picked list of accessions
+download_datasets(["PXD021013", "PXD014877-Mus-Musculus"], data_dir="data", files=["msnet"])
+```
+
+Filters understood: `enzyme`, `instrument`, `species`, `superkingdom`,
+`fragment_method`, `label`, `acquisition_method`, `accessions` (substring,
+e.g. `"PXD014877"` matches all its species splits), `min_psms`, `max_psms`,
+`min_runs`, `max_runs`. Each dataset lands in `<data_dir>/<accession>/`.
+
 ## Split data into train / validation / test sets
 
 Splits are computed as a deterministic hash partition of the peptide
