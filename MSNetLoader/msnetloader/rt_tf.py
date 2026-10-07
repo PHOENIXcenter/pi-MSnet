@@ -2,7 +2,7 @@ import duckdb
 import numpy as np
 import tensorflow as tf
 
-from msnetloader.utils import detect_parquet_schema
+from msnetloader.utils import detect_parquet_schema, validate_batch_size
 
 
 class RTTFDataset:
@@ -14,7 +14,6 @@ class RTTFDataset:
         min_consensus_support=None,
         max_pep=None
     ):
-        con = duckdb.connect()
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
 
@@ -46,15 +45,19 @@ class RTTFDataset:
                 ORDER BY length(sequence)
                 """
 
-        self.cursor = con.execute(query, [parquet_path] + params)
+        self.query = query
+        self.params = [parquet_path] + params
 
-        self.batch_size = batch_size
+        self.batch_size = validate_batch_size(batch_size)
 
     # =========================================================
     # generator
     # =========================================================
     def generator(self):
-        reader = self.cursor.fetch_record_batch(self.batch_size)
+        # A fresh connection per pass: the previous cursor is already consumed, and
+        # tf.data re-invokes this generator on every epoch.
+        con = duckdb.connect()
+        reader = con.execute(self.query, self.params).fetch_record_batch(self.batch_size)
         for batch in reader:
             if batch.num_rows == 0:
                 continue

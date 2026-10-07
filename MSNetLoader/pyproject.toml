@@ -25,7 +25,7 @@ dependencies = [
     "numpy",
     "pyarrow==17.0.0",
     "tensorflow",
-    "duckdb"
+    "duckdb>=1.1.0"
 ]
 
 [project.urls]

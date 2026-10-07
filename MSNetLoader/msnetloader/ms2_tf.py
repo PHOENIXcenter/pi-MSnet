@@ -4,7 +4,13 @@ import duckdb
 import numpy as np
 import tensorflow as tf
 
-from msnetloader.utils import detect_parquet_schema
+from msnetloader.utils import (
+    CHANNEL_MAP,
+    NUM_CHANNELS,
+    detect_parquet_schema,
+    resolve_active_channels,
+    validate_batch_size,
+)
 
 
 class MS2TFDataset:
@@ -18,7 +24,6 @@ class MS2TFDataset:
         min_consensus_support=None,
         max_pep=None
     ):
-        con = duckdb.connect()
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
 
@@ -79,31 +84,24 @@ class MS2TFDataset:
         ORDER BY length(sequence)
         """
 
-        self.cursor = con.execute(query, [parquet_path] + params)
+        self.query = query
+        self.params = [parquet_path] + params
 
-        self.batch_size = batch_size
+        self.batch_size = validate_batch_size(batch_size)
 
-        self.ion_types = set(ion_types)
-        self.charges = set(charges)
-
-        self.channel_map = {
-            ("b", 1): 0,
-            ("b", 2): 1,
-            ("y", 1): 2,
-            ("y", 2): 3,
-        }
-
-        self.active_channels = [
-            self.channel_map[(t, z)]
-            for t in ion_types for z in charges
-            if (t, z) in self.channel_map
-        ]
+        self.channel_map = CHANNEL_MAP
+        self.active_channels, self.ion_types, self.charges = resolve_active_channels(
+            ion_types, charges, self.channel_map
+        )
 
     # =========================================================
     # generator（核心替代 __iter__）
     # =========================================================
     def generator(self):
-        reader = self.cursor.fetch_record_batch(self.batch_size)
+        # A fresh connection per pass: the previous cursor is already consumed, and
+        # tf.data re-invokes this generator on every epoch.
+        con = duckdb.connect()
+        reader = con.execute(self.query, self.params).fetch_record_batch(self.batch_size)
         for batch in reader:
             if batch.num_rows == 0:
                 continue
@@ -162,7 +160,7 @@ class MS2TFDataset:
         B = len(sequences)
         Lmax = max(len(s) for s in sequences)
 
-        out = np.zeros((B, Lmax - 1, 4), dtype=np.float32)
+        out = np.zeros((B, Lmax - 1, NUM_CHANNELS), dtype=np.float32)
 
         for b in range(B):
             ions = fragments_list[b]
