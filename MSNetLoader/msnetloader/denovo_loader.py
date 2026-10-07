@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch.utils.data import IterableDataset
 
-from msnetloader.utils import detect_parquet_schema
+from msnetloader.utils import detect_parquet_schema, validate_batch_size
 
 
 class DeNovoIterableDataset(IterableDataset):
@@ -13,7 +13,6 @@ class DeNovoIterableDataset(IterableDataset):
                  max_pep=None,
                  extra_where=None):
 
-        con = duckdb.connect()
         self.min_consensus_support = min_consensus_support
         self.max_pep = max_pep
 
@@ -52,13 +51,17 @@ class DeNovoIterableDataset(IterableDataset):
                 {where_clause}
                 """
 
-        self.cursor = con.execute(query, [parquet_path] + params)
+        self.query = query
+        self.params = [parquet_path] + params
 
-        self.batch_size = batch_size
+        self.batch_size = validate_batch_size(batch_size)
         self.max_peaks = max_peaks
 
     def __iter__(self):
-        reader = self.cursor.fetch_record_batch(self.batch_size)
+        # A fresh connection per iteration: the cursor of a previous pass is already
+        # consumed, and DataLoader workers must not share a connection across forks.
+        con = duckdb.connect()
+        reader = con.execute(self.query, self.params).fetch_record_batch(self.batch_size)
 
         for batch in reader:
             if batch.num_rows == 0:

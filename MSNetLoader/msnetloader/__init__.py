@@ -21,7 +21,7 @@ from msnetloader.split import (
 try:
     __version__ = _package_version("msnetloader")
 except PackageNotFoundError:
-    __version__ = "0.0.4"
+    __version__ = "0.0.5"
 
 __all__ = [
     "__version__",
